@@ -1,0 +1,25 @@
+## [Visual Studio / Rider / .NET]
+# 编译输出目录
+bin/
+obj/
+
+# IDE 配置文件 (Visual Studio)
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+# IDE 配置文件 (JetBrains Rider)
+.idea/
+*.sln.iml
+
+# 临时文件和日志
+*.log
+*.tmp
+
+# 操作系统文件
+Thumbs.db
+Desktop.ini
+
+# 用户特定的方案文件
+*.slnx.user
