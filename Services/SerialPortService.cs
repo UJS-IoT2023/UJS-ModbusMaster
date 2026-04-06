@@ -74,36 +74,46 @@ namespace UJS_ModbusMaster.Services
                 // 发送数据
                 _serialPort.Write(data, 0, data.Length);
 
-                // 等待响应
-                Thread.Sleep(100);
+                // 等待响应 - Modbus RTU标准要求至少3.5个字符时间的间隔
+                // 9600波特率下，3.5个字符时间约为 3.5 * 11 / 9600 = 4ms
+                Thread.Sleep(50); // 给设备足够的处理时间
 
                 // 读取响应
                 var response = new System.Collections.Generic.List<byte>();
                 DateTime startTime = DateTime.Now;
+                int silenceCount = 0;
 
-                while ((DateTime.Now - startTime).TotalMilliseconds < 1000)
+                while ((DateTime.Now - startTime).TotalMilliseconds < 2000) // 2秒超时
                 {
                     if (_serialPort.BytesToRead > 0)
                     {
                         byte[] buffer = new byte[_serialPort.BytesToRead];
                         int read = _serialPort.Read(buffer, 0, buffer.Length);
                         response.AddRange(buffer[..read]);
+                        silenceCount = 0; // 重置静默计数
 
-                        // 如果已经读取到足够的数据，退出
+                        // 如果已经读取到足够的数据，继续检查是否还有更多数据
                         if (expectedLength > 0 && response.Count >= expectedLength)
                         {
-                            break;
-                        }
-
-                        // 如果3.5个字符时间没有新数据，认为接收完成
-                        Thread.Sleep(4);
-                        if (_serialPort.BytesToRead == 0)
-                        {
-                            break;
+                            // 再等待一段时间确认没有更多数据
+                            Thread.Sleep(20);
+                            if (_serialPort.BytesToRead == 0)
+                            {
+                                break;
+                            }
                         }
                     }
                     else
                     {
+                        // 如果没有数据，增加静默计数
+                        silenceCount++;
+                        
+                        // 如果已经收到一些数据，并且连续几次都没有新数据，认为接收完成
+                        if (response.Count > 0 && silenceCount >= 5)
+                        {
+                            break;
+                        }
+                        
                         Thread.Sleep(10);
                     }
                 }

@@ -35,7 +35,7 @@ namespace UJS_ModbusMaster.ViewModels
 
         // 设备设置
         [ObservableProperty]
-        private byte _slaveId = 2;
+        private byte _slaveId = 1;
 
         // 读取设置
         [ObservableProperty]
@@ -176,14 +176,25 @@ namespace UJS_ModbusMaster.ViewModels
                 request[5] = (byte)(ReadQuantity & 0xFF);
                 byte[] crc = ModbusCalculator.CalculateCrc(request);
 
-                SentData = BitConverter.ToString(request) + " " + BitConverter.ToString(crc);
+                SentData = BitConverter.ToString(request).Replace("-", " ") + " " + BitConverter.ToString(crc).Replace("-", " ");
 
                 // 执行读取
                 byte[] data = await Task.Run(() =>
                     _modbusService.ReadHoldingRegisters(SlaveId, ReadStartAddress, ReadQuantity));
 
-                ReceivedData = BitConverter.ToString(data);
-                RawBytesResult = BitConverter.ToString(data);
+                // 接收到的完整响应（包含从站地址、功能码、字节数、数据和CRC）
+                // 构建完整响应帧用于显示
+                byte[] fullResponse = new byte[data.Length + 5]; // 1(从站) + 1(功能码) + 1(字节数) + data + 2(CRC)
+                fullResponse[0] = SlaveId;
+                fullResponse[1] = 0x03;
+                fullResponse[2] = (byte)data.Length;
+                Array.Copy(data, 0, fullResponse, 3, data.Length);
+                byte[] responseCrc = ModbusCalculator.CalculateCrc(fullResponse.Take(fullResponse.Length - 2).ToArray());
+                fullResponse[fullResponse.Length - 2] = responseCrc[0];
+                fullResponse[fullResponse.Length - 1] = responseCrc[1];
+
+                ReceivedData = BitConverter.ToString(fullResponse).Replace("-", " ");
+                RawBytesResult = BitConverter.ToString(data).Replace("-", " ");
 
                 // 转换为不同格式显示
                 // 16进制显示
@@ -244,13 +255,14 @@ namespace UJS_ModbusMaster.ViewModels
                 request[5] = (byte)(WriteValue & 0xFF);
                 byte[] crc = ModbusCalculator.CalculateCrc(request);
 
-                SentData = BitConverter.ToString(request) + " " + BitConverter.ToString(crc);
+                SentData = BitConverter.ToString(request).Replace("-", " ") + " " + BitConverter.ToString(crc).Replace("-", " ");
 
                 // 执行写入
                 await Task.Run(() =>
                     _modbusService.WriteSingleRegister(SlaveId, WriteAddress, WriteValue));
 
-                ReceivedData = "写入成功（响应与请求相同）";
+                // 06功能码的响应与请求相同
+                ReceivedData = BitConverter.ToString(request).Replace("-", " ") + " " + BitConverter.ToString(crc).Replace("-", " ");
                 StatusMessage = $"写入成功: 地址 {WriteAddress} = {WriteValue} (0x{WriteValue:X4})";
                 MessageBox.Show($"成功写入寄存器 {WriteAddress}，值: {WriteValue} (0x{WriteValue:X4})",
                     "成功", MessageBoxButton.OK, MessageBoxImage.Information);
